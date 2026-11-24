@@ -117,6 +117,23 @@ label{font-size:13px;color:var(--dim)}
 .brush{padding:4px 6px!important;font-size:12px!important}
 #tutBar .skip{margin-top:10px;display:flex;gap:8px;justify-content:center}
 #hsScreen .panel{min-width:min(560px,92vw)}
+#game,#bgVideo,#ytHost{filter:var(--gfilter,none)}
+.side label:not(.row){display:block}
+.rst{font-size:11px;padding:1px 7px;margin-left:6px;border-radius:6px;font-weight:600;background:transparent;border:1px solid var(--line);color:var(--dim);vertical-align:middle}
+.rst:hover{color:#fff}
+.side .hint.sl{margin:-2px 0 8px;font-size:11.5px}
+#diagUI{position:absolute;inset:0;z-index:25;display:none;pointer-events:none}
+#diagUI.show{display:block}
+#diagUI > *{pointer-events:auto}
+#diagBar{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:min(1100px,94%);background:rgba(10,14,40,.94);border:3px solid var(--gold);border-radius:16px;padding:12px 18px;text-align:center}
+#diagTitle{font-family:var(--arcade);font-size:14px;color:var(--gold);margin-bottom:6px}
+#diagText{font-size:clamp(18px,2vw,28px);font-weight:800}
+#diagCount{font-family:var(--arcade);font-size:13px;color:var(--cyan);margin-top:6px}
+#diagCam{position:absolute;right:10px;bottom:10px;width:260px;border:2px solid var(--line);border-radius:8px;background:#000}
+#diagReport{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.85)}
+#diagReport .panel{width:min(900px,95vw);max-height:92vh;overflow:auto}
+#diagReport textarea{width:100%;height:120px;font-family:ui-monospace,monospace;font-size:11px;background:#050820;color:#cfe;border:1px solid var(--line);border-radius:8px}
+.dRow{display:grid;grid-template-columns:28px 1fr;gap:6px;padding:5px 0;border-bottom:1px dashed #2b3a8a;font-size:14px}
 .modeCard{background:rgba(0,0,0,.28);border:2px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px}
 .modeCard h3{margin:0;font-size:18px}.modeCard p{margin:0;font-size:13px;color:var(--dim);flex:1}
 </style>
@@ -204,15 +221,20 @@ label{font-size:13px;color:var(--dim)}
             <div class="row"><span style="color:var(--green);font-weight:800">● GREEN</span><span id="dGreen" class="mono small">—</span></div>
             <div class="row small"><span id="ignInfo">No ignored spots</span><button class="sm ghost" id="btnClearIgn">Clear ignored spots</button></div>
             <label class="row"><input type="checkbox" id="chkMask" checked> Show detection mask (pink = red candidates, cyan = green)</label>
-            <p class="hint">Shine each laser at the board. A crosshair should follow it on screen. Shots also appear here as X marks.</p>
+            <p class="hint">Shine each laser at the board. A crosshair should follow it in this view.</p>
+            <div class="row" style="margin-bottom:6px"><label>Lasers to test</label><select id="selTestCols"><option value="both">Red and green</option><option value="red">Red only</option><option value="green">Green only</option></select></div>
+            <button class="gold" id="btnTune" style="width:100%;margin-bottom:6px">🤖 Auto-tune the laser settings (about 1 minute)</button>
+            <div class="row"><button class="sm" id="btnDiag">🩺 Run troubleshooting test</button><button class="sm" id="btnAim">🎯 Full-screen aim test</button></div>
+            <p class="hint"><b>Auto-tune</b> watches the screen with no lasers, then with each laser held on dark, bright and target areas. It picks the settings that see the laser most reliably with the fewest false shots, then re-tests them automatically. The <b>troubleshooting test</b> gives a report code to send to Claude.</p>
           </div>
           <div class="card"><h3>Sensitivity</h3>
             <button class="sm gold" id="btnAutoBright">🤖 Auto-set brightness (lasers OFF for 3 s)</button>
             <label>Minimum brightness <b id="vBright"></b></label><input type="range" id="sBright" min="80" max="254">
             <label>Colour strength (how red/green) <b id="vDom"></b></label><input type="range" id="sDom" min="10" max="160">
             <label>Minimum dot size (pixels) <b id="vPix"></b></label><input type="range" id="sPix" min="1" max="30">
+            <label>Maximum dot size (pixels) <b id="vMaxPix"></b></label><input type="range" id="sMaxPix" min="10" max="300" step="5">
             <label>Ignore static glare <b id="vBg"></b></label><input type="range" id="sBg" min="0" max="100">
-            <p class="hint">Getting false shots? Raise brightness or colour strength. Missing shots? Lower them. "Ignore static glare" learns the projected picture and ignores anything that isn't changing.</p>
+            <label>Frames to confirm a dot <b id="vConf"></b></label><input type="range" id="sConf" min="1" max="4">
           </div>
           <div class="card"><h3>Aim</h3>
             <label>Hit forgiveness <b id="vForg"></b></label><input type="range" id="sForg" min="0" max="80">
@@ -260,6 +282,13 @@ label{font-size:13px;color:var(--dim)}
           </div>
         </div>
         <div class="side" style="flex:1">
+          <div class="card"><h3>Display</h3>
+            <label>Game brightness <b id="vDispB"></b></label><input type="range" id="sDispB" min="40" max="100">
+            <label>Game colour strength <b id="vDispS"></b></label><input type="range" id="sDispS" min="20" max="120">
+            <label>Score &amp; bar size <b id="vHud"></b></label><input type="range" id="sHud" min="80" max="200" step="5">
+            <label class="row"><input type="checkbox" id="chkReticle"> Show an aiming circle where the camera sees each laser</label>
+            <p class="hint sl">Off by default: anything drawn on top of the laser can confuse the camera.</p>
+          </div>
           <div class="card"><h3>Sound</h3>
             <label>Sound effects <b id="vSfx"></b></label><input type="range" id="sSfx" min="0" max="100">
             <label>Music <b id="vMus"></b></label><input type="range" id="sMus" min="0" max="100">
@@ -341,6 +370,19 @@ label{font-size:13px;color:var(--dim)}
   </div>
 
   <div id="tutBar"><div id="tutText"></div><div class="skip"><button class="sm ghost" id="tutNext">Skip step ▶</button><button class="sm ghost" data-act="quit">Exit tutorial</button></div></div>
+
+  <!-- TROUBLESHOOTING -->
+  <div id="diagUI">
+    <div id="diagBar"><div id="diagTitle"></div><div id="diagText"></div><div id="diagCount"></div>
+      <div class="row" style="justify-content:center;margin-top:8px"><button class="sm" id="diagSkip">Skip step ▶</button><button class="sm ghost" id="diagStop">✖ Stop test</button></div></div>
+    <div id="diagReport"><div class="panel col">
+      <div class="endTitle" style="font-size:20px;margin:0">TROUBLESHOOTING RESULTS</div>
+      <div id="diagSummary"></div>
+      <p class="hint" style="margin:6px 0 0"><b>Send this report code to Claude</b> so the detection can be tuned for your room:</p>
+      <textarea id="diagCode" readonly></textarea>
+      <div class="row" style="justify-content:flex-end"><button class="sm green" id="diagApply">✔ Keep new settings</button><button class="sm" id="diagUndo">↺ Undo — go back to old settings</button><button class="sm" id="diagTuneAgain">🤖 Tune again</button><button class="sm gold" id="diagCopy">📋 Copy report code</button><button class="sm" id="diagAgain">↻ Run again</button><button class="sm ghost" id="diagClose">Close</button></div>
+    </div></div>
+  </div>
 
   <!-- EDITOR -->
   <div id="editorUI">
@@ -426,13 +468,14 @@ const DEFAULTS = {
   minBright: 215, dom: 50, minPix: 2, bgIgnore: 92,
   forgive: 22, latency: 90,
   duckOn: true, duckT: 9, p1Side: 'left',
-  mT: 0, mB: 0, mL: 0, mR: 0, calDst: null, heatShot: 16, holdMax: 1, contamOn: true, contamRate: 100, cool: 70, holdFire: 300, overheatLife: true,
+  mT: 0, mB: 0, mL: 0, mR: 0, testCols: 'both', confirm: 2, maxPix: 45, reticle: false, dispB: 75, dispS: 75, hud: 140, calDst: null, heatShot: 16, holdMax: 1, contamOn: true, contamRate: 100, cool: 70, holdFire: 300, overheatLife: true,
   size: 100, lives: 3,
   sfx: 80, music: 45,
   round: 120, diff: 'normal', p1col: 'either'
 };
 const S = Object.assign({}, DEFAULTS);
 function loadSettings() { try { Object.assign(S, JSON.parse(localStorage.getItem('lb_settings') || '{}')); } catch (e) { } if ((S.ver || 1) < 2) { Object.assign(S, { minBright: DEFAULTS.minBright, dom: DEFAULTS.dom, bgIgnore: DEFAULTS.bgIgnore, ver: 2 }); } }
+function applyDisplay() { document.documentElement.style.setProperty('--gfilter', `brightness(${S.dispB / 100}) saturate(${S.dispS / 100})`); }
 function saveSettings() { try { localStorage.setItem('lb_settings', JSON.stringify(S)); } catch (e) { } }
 loadSettings();
 
@@ -604,92 +647,132 @@ const Vision = {
   },
   boardTrack() { return this.boardStream && this.boardStream.getVideoTracks()[0]; },
   updateH() {
-    const c = S.corners;
-    this.H = (c && c.length === 4) ? homography(c.map(p => [p.x, p.y]), S.calDst || [[0, 0], [1, 0], [1, 1], [0, 1]]) : null;
+    const c = S.corners, dst = S.calDst || [[0, 0], [1, 0], [1, 1], [0, 1]];
+    this.H = (c && c.length === 4) ? homography(c.map(p => [p.x, p.y]), dst) : null;
+    this.Hi = (c && c.length === 4) ? homography(dst, c.map(p => [p.x, p.y])) : null;
   },
-  camToScreen(nx, ny) { // camera normalised -> screen normalised
-    if (this.H) return applyH(this.H, nx, ny);
-    return [nx, ny];
+  camToScreen(nx, ny) { return this.H ? applyH(this.H, nx, ny) : [nx, ny]; },
+  screenToCam(u, v) { return this.Hi ? applyH(this.Hi, u, v) : [u, v]; },
+  // average camera colour around a screen point (used by the troubleshooting test)
+  sampleScreen(u, v, R = 3) {
+    if (!this.lastD) return null; const [cx, cy] = this.screenToCam(u, v), x0 = Math.round(cx * this.w), y0 = Math.round(cy * this.h);
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let y = y0 - R; y <= y0 + R; y++) for (let x = x0 - R; x <= x0 + R; x++) { if (x < 0 || y < 0 || x >= this.w || y >= this.h) continue; const i = (y * this.w + x) * 4; r += this.lastD[i]; g += this.lastD[i + 1]; b += this.lastD[i + 2]; n++; }
+    return n ? [Math.round(r / n), Math.round(g / n), Math.round(b / n)] : null;
   },
+  pixelAt(cx, cy) { if (!this.lastD) return [0, 0, 0]; const i = (Math.round(cy) * this.w + Math.round(cx)) * 4; return [this.lastD[i], this.lastD[i + 1], this.lastD[i + 2]]; },
   // ---------- per-frame laser detection ----------
+  // A pixel is a candidate if EITHER (a) it is bright and clearly red/green, OR (b) its red/green
+  // has jumped up compared with the learned background picture (this catches lasers on bright areas).
   process() {
     const v = this.boardVideo;
-    if (!this.boardOn()) { for (const k in this.spots) { const s = this.spots[k]; s.seen = false; s.present = false; } return; }
+    if (!this.boardOn()) { for (const k in this.spots) { const s = this.spots[k]; s.seen = false; s.present = false; s.streak = 0; } return; }
     if (v.currentTime === this.lastT) return false; this.lastT = v.currentTime;
     this._fc++; const now = performance.now(); if (now - this._ft > 1000) { this.fps = this._fc; this._fc = 0; this._ft = now; }
     const vw = v.videoWidth, vh = v.videoHeight; if (!vw) return;
-    const w = Math.min(vw, 960), h = Math.round(w * vh / vw);
-    if (this.w !== w || this.h !== h) { this.c.width = this.w = w; this.c.height = this.h = h; this.bgR = null; }
-    this.ctx.drawImage(v, 0, 0, w, h);
-    const d = this.ctx.getImageData(0, 0, w, h).data, n = w * h;
-    if (!this.bgR) { this.bgR = new Float32Array(n); this.bgG = new Float32Array(n); this.bgInit = 15; }
-    const bgR = this.bgR, bgG = this.bgG, minB = S.minBright, dom = S.dom, bgK = S.bgIgnore / 100;
-    const step = w > 700 ? 2 : 1, a = this.bgInit > 0 ? 0.3 : 0.03; if (this.bgInit > 0) this.bgInit--;
-    const cR = this.cR || (this.cR = []), cG = this.cG || (this.cG = []); cR.length = 0; cG.length = 0;
-    const mask = this.wantMask ? (this.mask = []) : null; let pkR = 0, pkG = 0;
-    for (let y = 0; y < h; y += step) {
-      let p = y * w, i = p * 4;
-      for (let x = 0; x < w; x += step, p += step, i += 4 * step) {
-        const r = d[i], g = d[i + 1], b = d[i + 2];
-        const rs = r - (g > b ? g : b), gs = g - (r > b ? r : b);
-        const rsp = rs > 0 ? rs : 0, gsp = gs > 0 ? gs : 0;
-        const br = bgR[p], bg = bgG[p];
-        bgR[p] = br + (rsp - br) * a; bgG[p] = bg + (gsp - bg) * a;
-        const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
-        if (rs > dom && mx > pkR) pkR = mx; else if (gs > dom * .55 && mx > pkG) pkG = mx;
-        if (mx < minB) continue;
-        if (rs > dom) { const val = rs - br * bgK + (mx - 180) * .5; if (val > dom * .5) { if (mask && mask.length < 30000) mask.push(p); if (cR.length < 8000) cR.push(val, p); } }
-        else if (gs > dom * .55) { const val = gs - bg * bgK + (mx - 180) * .5; if (val > dom * .4) { if (mask && mask.length < 30000) mask.push(-p - 1); if (cG.length < 8000) cG.push(val, p); } }
-      }
+    const w = Math.min(vw, 640), h = Math.round(w * vh / vw), n = w * h;
+    if (this.w !== w || this.h !== h || !this.bgR) {
+      this.c.width = this.w = w; this.c.height = this.h = h;
+      this.bgR = new Float32Array(n); this.bgG = new Float32Array(n); this.BR = new Float32Array(n); this.BG = new Float32Array(n); this.BB = new Float32Array(n);
+      this.cand = new Uint8Array(n); this.freeze = new Uint8Array(n); this.freezeRects = []; this.bgInit = 15; this.inMask = null;
     }
-    this.peak = { r: pkR, g: pkG };
-    this.pick('red', cR, d, w, h, true);
-    this.pick('green', cG, d, w, h, false);
+    if (!this.inMask || this.inMaskKey !== JSON.stringify(S.corners) + S.calDst) this.buildInMask(w, h);
+    this.ctx.drawImage(v, 0, 0, w, h);
+    const d = this.ctx.getImageData(0, 0, w, h).data; this.lastD = d;
+    const res = this.scan(d, w, h, this.liveParams(), true);
+    if (this.tuner) this.tuner(d, w, h);
+    this.applySpot('red', res.red, w, h); this.applySpot('green', res.green, w, h);
+    this.updateBg(d, n);
+    const fr = this.freeze;
+    for (const [x0, y0, x1, y1] of this.freezeRects) for (let y = y0; y < y1; y++) fr.fill(0, y * w + x0, y * w + x1);
+    this.freezeRects = [];
+    for (const k of ['red', 'green']) { const s = this.spots[k]; if (s.seen) { const x0 = Math.max(0, (s.cx | 0) - 14), x1 = Math.min(w, (s.cx | 0) + 14), y0 = Math.max(0, (s.cy | 0) - 14), y1 = Math.min(h, (s.cy | 0) + 14); for (let y = y0; y < y1; y++) fr.fill(1, y * w + x0, y * w + x1); this.freezeRects.push([x0, y0, x1, y1]); } }
+    this.frameNo = (this.frameNo || 0) + 1;
     return true;
   },
-  // try the strongest candidates; reject big blobs (projected pictures) so only small bright dots count
-  pick(col, c, d, w, h, isRed) {
-    const s = this.spots[col]; let res = null;
-    // drop candidates near spots we've learned to ignore (glare / reflections that never move)
+  liveParams() { return { minB: S.minBright, dom: S.dom, bgK: S.bgIgnore / 100, minPix: S.minPix, maxPix: S.maxPix }; },
+  updateBg(d, n) {
+    const bgR = this.bgR, bgG = this.bgG, BR = this.BR, BG = this.BG, BB = this.BB, fr = this.freeze, a = this.bgInit > 0 ? 0.3 : 0.03; if (this.bgInit > 0) this.bgInit--;
+    for (let p = 0, i = 0; p < n; p++, i += 4) {
+      if (fr[p]) continue; const r = d[i], g = d[i + 1], b = d[i + 2], rs = r - (g > b ? g : b), gs = g - (r > b ? r : b);
+      bgR[p] += ((rs > 0 ? rs : 0) - bgR[p]) * a; bgG[p] += ((gs > 0 ? gs : 0) - bgG[p]) * a; BR[p] += (r - BR[p]) * a; BG[p] += (g - BG[p]) * a; BB[p] += (b - BB[p]) * a;
+    }
+  },
+  // Score every pixel with the given settings and return the best red/green dot (or null).
+  // A pixel is a candidate if EITHER (a) it is bright and clearly red/green, OR (b) its red/green has
+  // jumped up compared with the learned background picture (catches lasers on bright areas).
+  scan(d, w, h, P, main) {
+    const n = w * h, bgR = this.bgR, bgG = this.bgG, BR = this.BR, BG = this.BG, BB = this.BB, cand = this.cand, inM = this.inMask;
+    const minB = P.minB, dom = P.dom, bgK = P.bgK;
+    const cR = this.cR || (this.cR = []), cG = this.cG || (this.cG = []); cR.length = 0; cG.length = 0;
+    const mask = main && this.wantMask ? (this.mask = []) : null; let pkR = 0, pkG = 0, bright = 0;
+    for (let p = 0, i = 0; p < n; p++, i += 4) {
+      if (!inM[p]) { cand[p] = 0; continue; }
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const rs = r - (g > b ? g : b), gs = g - (r > b ? r : b);
+      const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      if (main) { if (mx > 250) bright++; if (rs > dom && mx > pkR) pkR = mx; else if (gs > dom * .55 && mx > pkG) pkG = mx; }
+      let vR = -1, vG = -1;
+      if (mx >= minB) {
+        if (rs > dom) vR = rs - bgR[p] * bgK + (mx - 180) * .5;
+        else if (gs > dom * .55) vG = gs - bgG[p] * bgK + (mx - 180) * .5;
+      }
+      const dr = r - BR[p], dg = g - BG[p], db = b - BB[p];
+      if (dr > dom * .6 && r > minB * .6) { const o = dg > db ? dg : db, c = dr - (o > 0 ? o : 0); if (c > dom * .55 && c + 30 > vR) vR = c + 30; }
+      if (dg > dom * .6 && g > minB * .6) { const o = dr > db ? dr : db, c = dg - (o > 0 ? o : 0); if (c > dom * .55 && c + 30 > vG) vG = c + 30; }
+      let f = 0;
+      if (vR > dom * .5 && vR >= vG) { f = 1; if (cR.length < 8000) cR.push(vR, p); if (mask && mask.length < 30000) mask.push(p); }
+      else if (vG > dom * .4) { f = 2; if (cG.length < 8000) cG.push(vG, p); if (mask && mask.length < 30000) mask.push(-p - 1); }
+      cand[p] = f;
+    }
+    if (main) { this.peak = { r: pkR, g: pkG }; this.info = { cR: cR.length / 2, cG: cG.length / 2, pkR, pkG, sat: bright / Math.max(1, this.inCount) }; }
+    return { red: this.pickBest('red', cR, d, w, h, 1, P), green: this.pickBest('green', cG, d, w, h, 2, P) };
+  },
+  // only pixels inside the calibrated screen (plus a small margin) can be lasers: ignores lights, windows, people
+  buildInMask(w, h) {
+    const m = new Uint8Array(w * h); let c = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [u, v] = this.camToScreen(x / w, y / h); if (u > -.03 && u < 1.03 && v > -.03 && v < 1.03) { m[y * w + x] = 1; c++; } }
+    this.inMask = m; this.inCount = c; this.inMaskKey = JSON.stringify(S.corners) + S.calDst;
+  },
+  // try the strongest candidates; reject big blobs (projected pictures) so only small dots count
+  pickBest(col, c, d, w, h, flag, P) {
     for (const ig of this.ignore) if (ig.col === col) for (let k = 0; k < c.length; k += 2) { const q = c[k + 1]; if (Math.abs(q % w - ig.x) < 18 && Math.abs(((q / w) | 0) - ig.y) < 18) c[k] = -1; }
-    for (let tries = 0; tries < 8 && !res; tries++) {
+    for (let tries = 0; tries < 24; tries++) {
       let bi = -1, bv = 0; for (let k = 0; k < c.length; k += 2) if (c[k] > bv) { bv = c[k]; bi = k; }
       if (bi < 0) break;
-      const p = c[bi + 1], r = this.cluster(p, d, w, h, isRed);
-      if (r) { res = r; break; }
-      const bx = p % w, by = (p / w) | 0; // suppress this area and try the next peak
-      for (let k = 0; k < c.length; k += 2) { const q = c[k + 1]; if (Math.abs(q % w - bx) < 30 && Math.abs(((q / w) | 0) - by) < 30) c[k] = -1; }
+      const p = c[bi + 1], r = this.cluster(p, d, w, h, flag, P);
+      if (r) { const [u, v] = this.camToScreen(r.cx / w, r.cy / h); if (u >= -0.04 && u <= 1.04 && v >= -0.04 && v <= 1.04) { r.nx = u; r.ny = v; return r; } }
+      const bx = p % w, by = (p / w) | 0;
+      for (let k = 0; k < c.length; k += 2) { const q = c[k + 1]; if (Math.abs(q % w - bx) < 40 && Math.abs(((q / w) | 0) - by) < 40) c[k] = -1; }
     }
-    let found = false;
-    if (res) {
-      const [u, v] = this.camToScreen(res.cx / w, res.cy / h);
-      if (u >= -0.04 && u <= 1.04 && v >= -0.04 && v <= 1.04) {
-        found = true; s.cx = res.cx; s.cy = res.cy; s.count = res.cnt; s.nx = u; s.ny = v;
-        const bgA = isRed ? this.bgR : this.bgG; // stop a held laser being learned as background
-        for (let y = Math.max(0, (s.cy | 0) - 10); y < Math.min(h, (s.cy | 0) + 10); y++) for (let x = Math.max(0, (s.cx | 0) - 10); x < Math.min(w, (s.cx | 0) + 10); x++) bgA[y * w + x] *= 0.9;
-      }
-    }
-    // a dot that hasn't moved at all for 5 s is glare, not a hand-held laser
+    return null;
+  },
+  applySpot(col, res, w, h) {
+    const s = this.spots[col]; let found = !!res;
+    if (found) { s.cx = res.cx; s.cy = res.cy; s.count = res.cnt; s.nx = res.nx; s.ny = res.ny; }
     const now = performance.now();
     if (found) {
       if (!s.anchor || Math.abs(s.cx - s.anchor.x) > 3 || Math.abs(s.cy - s.anchor.y) > 3) s.anchor = { x: s.cx, y: s.cy, t: now };
       else if (now - s.anchor.t > 5000) { this.ignore.push({ col, x: s.anchor.x, y: s.anchor.y }); s.anchor = null; found = false; toast(`Ignoring a ${col} spot that never moves (glare?). Clear it on the Laser tuning tab.`, 4000); }
     } else s.anchor = null;
     s.seen = found;
-    if (found) { s.miss = 0; s.present = true; } else { s.miss++; if (s.miss >= 2) s.present = false; }
-  },
-  cluster(idx, d, w, h, isRed) {
-    const bx = idx % w, by = (idx / w) | 0, R = 12, RB = 26; let sx = 0, sy = 0, sw = 0, cnt = 0, big = 0;
-    const dom = S.dom * (isRed ? 0.7 : 0.4), minB = S.minBright * 0.85, maxBlob = 260 * (w / 640) * (w / 640);
-    for (let y = Math.max(0, by - RB); y < Math.min(h, by + RB); y++) for (let x = Math.max(0, bx - RB); x < Math.min(w, bx + RB); x++) {
-      const i = (y * w + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-      const sc = isRed ? r - Math.max(g, b) : g - Math.max(r, b), mx = Math.max(r, g, b);
-      const inner = Math.abs(x - bx) < R && Math.abs(y - by) < R;
-      if (sc > dom && mx > minB) { big++; if (inner) { sx += x * sc; sy += y * sc; sw += sc; cnt++; } }
-      else if (inner && mx > 245 && Math.abs(x - bx) < 6 && Math.abs(y - by) < 6) { sx += x * 40; sy += y * 40; sw += 40; cnt++; } // white-hot core
+    if (found) {
+      // a dot only "confirms" if it's in roughly the same place as last frame (stops scattered sparkles adding up)
+      const near = s.lastSeen && Math.abs(s.cx - s.lastSeen[0]) < 30 && Math.abs(s.cy - s.lastSeen[1]) < 30;
+      s.streak = near || s.present ? (s.streak || 0) + 1 : 1; s.lastSeen = [s.cx, s.cy]; s.miss = 0; if (s.streak >= S.confirm) s.present = true;
     }
-    if (cnt < S.minPix || sw <= 0 || big > maxBlob) return null;
-    return { cx: sx / sw, cy: sy / sw, cnt };
+    else { s.streak = 0; s.lastSeen = null; s.miss++; if (s.miss >= 2) s.present = false; }
+  },
+  cluster(idx, d, w, h, flag, P) {
+    const bx = idx % w, by = (idx / w) | 0, R = 10, RB = 26, cand = this.cand; let sx = 0, sy = 0, cnt = 0, big = 0;
+    const maxBlob = 260 * (w / 640) * (w / 640);
+    for (let y = Math.max(0, by - RB); y < Math.min(h, by + RB); y++) for (let x = Math.max(0, bx - RB); x < Math.min(w, bx + RB); x++) {
+      const p = y * w + x, inner = Math.abs(x - bx) < R && Math.abs(y - by) < R;
+      if (cand[p] === flag) { big++; if (inner) { sx += x; sy += y; cnt++; } }
+      else if (inner && Math.abs(x - bx) < 5 && Math.abs(y - by) < 5) { const i = p * 4; if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) { sx += x; sy += y; cnt++; } } // white-hot core
+    }
+    if (cnt < P.minPix || cnt > P.maxPix || big > maxBlob) return null;
+    return { cx: sx / cnt, cy: sy / cnt, cnt };
   },
   // ---------- duck camera ----------
   processDuck() {
@@ -962,7 +1045,7 @@ const FX = {
   goo(x, y, col, n = 12) { for (let i = 0; i < n; i++) { const a = rand(TAU), s = rand(80, 300); this.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 100, life: rand(.6, 1.2), t: 0, col, size: rand(6, 14), g: 900, kind: 'goo' }); } },
   ring(x, y, col, r = 120, life = .45, w = 8) { this.rings.push({ x, y, col, r, life, t: 0, w }); },
   text(x, y, txt, col = '#fff', size = 28, life = 1, vy = -70) { this.texts.push({ x, y, txt, col, size, life, t: 0, vy }); },
-  x(x, y, col, hit, size = 1) { this.xs.push({ x, y, col, hit, t: 0, life: hit ? .9 : .6, size, rot: rand(-.2, .2) }); },
+  x(x, y, col, hit, size = 1, plus = false) { this.xs.push({ x, y, col: hit ? '#ffffff' : '#9a9a9a', hit, t: 0, life: hit ? .9 : .6, size, rot: (plus ? Math.PI / 4 : 0) + rand(-.2, .2) }); },
   update(dt) {
     for (const a of [this.parts, this.texts, this.rings, this.xs]) for (let i = a.length - 1; i >= 0; i--) { const p = a[i]; p.t += dt; if (p.t >= p.life) a.splice(i, 1); }
     for (const p of this.parts) { p.vx *= (1 - dt * 1.5); p.vy = p.vy * (1 - dt * 1.5) + p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
@@ -983,12 +1066,12 @@ const FX = {
       const s = (x.hit ? 22 : 16) * pop * x.size * Game.uiScale;
       ctx.save(); ctx.translate(x.x, x.y); ctx.rotate(x.rot); ctx.globalAlpha = k > .6 ? (1 - k) / .4 : 1; ctx.lineCap = 'round';
       const gap = s * .3;
-      for (const [w, c] of [[8, '#000'], [4.5, x.hit ? '#fff' : x.col]]) {
+      for (const [w, c] of [[8, '#000'], [4.5, x.col]]) {
         ctx.lineWidth = w * Game.uiScale; ctx.strokeStyle = c; ctx.beginPath();
         for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { ctx.moveTo(dx * gap, dy * gap); ctx.lineTo(dx * s, dy * s); }
         ctx.stroke();
       }
-      if (x.hit) { ctx.strokeStyle = x.col; ctx.lineWidth = 2.5 * Game.uiScale; ctx.beginPath(); ctx.arc(0, 0, s * (1.2 + k), 0, TAU); ctx.stroke(); }
+      if (x.hit) { ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 2.5 * Game.uiScale; ctx.beginPath(); ctx.arc(0, 0, s * (1.2 + k), 0, TAU); ctx.stroke(); }
       ctx.restore();
     }
     for (const t of this.texts) {
@@ -1098,7 +1181,8 @@ const Game = {
     const dt = Math.min(.05, Math.max(0, (ts - (this.last || ts)) / 1000)); this.last = ts; this.rt += dt;
     Vision.process(); Vision.processDuck();
     if (this.mode !== 'editor') Media.tick(dt);
-    if (this.mode === 'setup') { UI.setupFrame(dt); }
+    if (this.mode === 'setup') { UI.setupFrame(dt); if (UI.setupTest) return; }
+    if (this.mode === 'diag') { Diag.frame(dt); return; }
     if (this.mode === 'editor') { Editor.frame(dt); return; }
     if (this.running && !this.paused) this.update(dt);
     this.render(dt);
@@ -1186,7 +1270,7 @@ const Game = {
     if (this.rx) return this.reactionShot(p, x, y, lat);
     const big = p.pu.magnify > 0 ? 2 : 1;
     let any = false;
-    pts.forEach((pt, k) => { const hit = this.hitAt(p, pt[0], pt[1], big, lat); if (hit) any = true; FX.x(pt[0], pt[1], p.soft, hit, (big > 1 ? 1.6 : 1) * (k ? .8 : 1)); });
+    pts.forEach((pt, k) => { const hit = this.hitAt(p, pt[0], pt[1], big, lat); if (hit) any = true; FX.x(pt[0], pt[1], p.soft, hit, (big > 1 ? 1.6 : 1) * (k ? .8 : 1), p.i === 1); });
     if (any) {
       p.combo++; p.st.hits++; p.st.maxCombo = Math.max(p.st.maxCombo, p.combo);
       if (p.combo % 5 === 0) { Snd.play('combo', 1 + Math.min(1, p.combo / 40)); FX.text(x, y - 70 * this.uiScale, `COMBO x${this.mult(p)}`, '#ffc83d', 20, 1.1); }
@@ -1367,7 +1451,7 @@ const Game = {
   drawTarget(ctx, t) {
     if (t.dead) return; const s = Math.min(1, t.t / .2), r = t.r * easeOutBack(s);
     ctx.save(); ctx.translate(t.x, t.y);
-    const rings = ['#ffffff', '#2b6bff', '#ffffff', '#2b6bff', '#ffc83d'];
+    const rings = ['#cfd6f2', '#2b5bd8', '#cfd6f2', '#2b5bd8', '#a98cff'];
     rings.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(0, 0, r * (1 - i * .2), 0, TAU); ctx.fill(); });
     ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
     ctx.strokeStyle = t.t > t.life - 1 && Math.sin(this.rt * 20) > 0 ? '#fff' : '#ffc83d'; ctx.lineWidth = 5 * this.uiScale; ctx.beginPath(); ctx.arc(0, 0, r + 9 * this.uiScale, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - t.t / t.life)); ctx.stroke();
@@ -1592,7 +1676,7 @@ const Game = {
     for (const m of this.monsters) this.drawMonster(ctx, m);
     if (this.boss) this.drawBossEntity(ctx);
     FX.draw(ctx);
-    if (this.running) for (const p of this.players) if (p.present && p.alive) this.drawReticle(ctx, p);
+    if (this.running && S.reticle) for (const p of this.players) if (p.present && p.alive) this.drawReticle(ctx, p);
     ctx.restore();
     if (this.freezeT > 0) { ctx.fillStyle = `rgba(120,200,255,${.12 + Math.sin(this.rt * 6) * .03})`; ctx.fillRect(0, 0, W, H); }
     if (this.running || this.ending) this.drawHUD(ctx);
@@ -1665,89 +1749,91 @@ const Game = {
   },
   drawReticle(ctx, p) {
     const r = 16 * this.uiScale * (p.pu.magnify > 0 ? 2 : 1), t = this.rt;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(t * 2); ctx.strokeStyle = p.soft; ctx.lineWidth = 2.5; ctx.globalAlpha = .9;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(t * 2); ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 2.5; ctx.globalAlpha = .9;
     for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, 0, r, i * Math.PI / 2 + .2, i * Math.PI / 2 + 1.3); ctx.stroke(); }
-    if (p.held && p.heldT > .15 && !(p.pu.cool > 0)) { ctx.rotate(-t * 2); ctx.strokeStyle = '#ffe9a0'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(p.heat / 100, 0, 1)); ctx.stroke(); }
+    if (p.held && p.heldT > .15 && !(p.pu.cool > 0)) { ctx.rotate(-t * 2); ctx.strokeStyle = '#dddddd'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(p.heat / 100, 0, 1)); ctx.stroke(); }
     if (p.ammo > 0) { ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(0, 0, 80 * this.uiScale, 0, TAU); ctx.stroke(); }
     ctx.restore();
   },
   drawHUD(ctx) {
-    const W = this.W, H = this.H, u = this.uiScale, pad = 22 * u;
-    ctx.save(); ctx.textBaseline = 'top';
+    const W = this.W, H = this.H, u = this.uiScale * S.hud / 100, pad = 18 * u;
+    ctx.save(); ctx.textBaseline = 'top'; ctx.lineJoin = 'round';
+    const heatH = 34 * u, heatY = H - heatH - 8 * u;
     for (const p of this.players) {
       const right = p.i === 1, x = right ? W - pad : pad, al = right ? 'right' : 'left', sx = right ? -1 : 1;
       ctx.textAlign = al; ctx.globalAlpha = p.alive ? 1 : .45;
-      ctx.font = `${14 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = p.hex; ctx.fillText(p.name + (p.alive ? '' : ' KO'), x, pad);
-      ctx.font = `${30 * u}px 'Press Start 2P', monospace`; ctx.lineWidth = 6 * u; ctx.strokeStyle = '#000';
+      ctx.font = `${14 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = p.hex; ctx.lineWidth = 5 * u; ctx.strokeStyle = '#000'; ctx.strokeText(p.name + (p.alive ? '' : ' KO'), x, pad); ctx.fillText(p.name + (p.alive ? '' : ' KO'), x, pad);
+      ctx.font = `${30 * u}px 'Press Start 2P', monospace`; ctx.lineWidth = 6 * u;
       const sc = String(Math.round(p.shownScore)).padStart(7, '0'); ctx.strokeText(sc, x, pad + 22 * u); ctx.fillStyle = '#fff'; ctx.fillText(sc, x, pad + 22 * u);
-      // lives
-      ctx.font = `${22 * u}px Rubik, sans-serif`;
-      for (let i = 0; i < Math.max(p.lives, 0); i++) { ctx.fillStyle = '#ff3b4f'; ctx.fillText('♥', x + sx * i * 26 * u, pad + 62 * u); }
-      // heat bar
-      const bw = 230 * u, bh = 16 * u, by = pad + 94 * u, bx = right ? x - bw : x;
-      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
-      const hk = clamp(p.heat / 100, 0, 1), hot = hk > .75;
-      const hg = ctx.createLinearGradient(bx, 0, bx + bw, 0); hg.addColorStop(0, '#4fe3ff'); hg.addColorStop(.5, '#ffc83d'); hg.addColorStop(1, '#ff2a2a');
-      ctx.fillStyle = hg; const fillW = bw * hk; ctx.fillRect(right ? bx + bw - fillW : bx, by + (hot ? rand(-1.5, 1.5) : 0), fillW, bh);
-      ctx.font = `${9 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = hot && Math.sin(this.rt * 30) > 0 ? '#ff2a2a' : '#fff';
-      ctx.textAlign = right ? 'right' : 'left';
-      ctx.fillText(p.locked > 0 ? 'GUN COOLING…' : p.pu.cool > 0 ? 'HEAT ❄ FROZEN' : hot ? '!! TOO HOT !!' : 'GUN HEAT', right ? bx + bw - 4 : bx + 4, by + 3.5 * u);
-      // combo
-      let yy = by + bh + 10 * u; ctx.textAlign = al;
-      if (p.combo >= 2) { ctx.font = `${12 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#ffc83d'; ctx.fillText(`COMBO ${p.combo}  x${this.mult(p)}`, x, yy); yy += 20 * u; }
-      // power-ups
+      ctx.font = `${24 * u}px Rubik, sans-serif`;
+      for (let i = 0; i < Math.max(p.lives, 0); i++) { ctx.fillStyle = '#ff3b4f'; ctx.fillText('♥', x + sx * i * 28 * u, pad + 62 * u); }
+      let yy = pad + 96 * u;
+      if (p.combo >= 2) { ctx.font = `${13 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#ffc83d'; ctx.strokeText(`COMBO ${p.combo}  x${this.mult(p)}`, x, yy); ctx.fillText(`COMBO ${p.combo}  x${this.mult(p)}`, x, yy); yy += 24 * u; }
       const pus = []; if (p.ammo > 0) pus.push(['shotgun', p.ammo]); for (const k in p.pu) if (p.pu[k] > 0) pus.push([k, p.pu[k]]);
       for (const [k, v] of pus) {
-        const d = PU[k], pw = 200 * u, ph = 10 * u, px = right ? x - pw : x;
-        ctx.font = `800 ${13 * u}px Rubik, sans-serif`; ctx.fillStyle = d.col; ctx.textAlign = al; ctx.fillText(d.icon + ' ' + d.name, x, yy); yy += 17 * u;
+        const d = PU[k], pw = 220 * u, ph = 12 * u, px = right ? x - pw : x;
+        ctx.font = `800 ${15 * u}px Rubik, sans-serif`; ctx.fillStyle = d.col; ctx.textAlign = al; ctx.lineWidth = 4 * u; ctx.strokeText(d.icon + ' ' + d.name, x, yy); ctx.fillText(d.icon + ' ' + d.name, x, yy); yy += 19 * u;
         ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(px - 1, yy - 1, pw + 2, ph + 2);
         if (k === 'shotgun') { const n = Math.min(v, 16), w = pw / Math.max(8, n); for (let i = 0; i < n; i++) { ctx.fillStyle = d.col; ctx.fillRect(right ? px + pw - (i + 1) * w + 1 : px + i * w + 1, yy, w - 2, ph); } }
         else { const k2 = v / d.time; ctx.fillStyle = k2 < .25 && Math.sin(this.rt * 20) > 0 ? '#fff' : d.col; ctx.fillRect(right ? px + pw * (1 - k2) : px, yy, pw * k2, ph); }
-        yy += ph + 8 * u;
+        yy += ph + 9 * u;
       }
+      // ---- gun heat: full width along the bottom (split in half for 2 players)
+      const gap = 10 * u, bx = this.np === 2 ? (right ? W / 2 + gap / 2 : pad) : pad, bw = this.np === 2 ? W / 2 - pad - gap / 2 : W - pad * 2;
+      const hk = clamp(p.heat / 100, 0, 1), hot = hk > .7, holding = p.held && p.heldT > .15 && !(p.pu.cool > 0);
+      ctx.globalAlpha = p.alive ? 1 : .35;
+      ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(bx - 3, heatY - 3, bw + 6, heatH + 6);
+      ctx.strokeStyle = p.locked > 0 ? '#ff3b4f' : hot && Math.sin(this.rt * 20) > 0 ? '#fff' : 'rgba(255,255,255,.35)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, heatY - 3, bw + 6, heatH + 6);
+      const hg = ctx.createLinearGradient(bx, 0, bx + bw, 0); hg.addColorStop(0, '#4fe3ff'); hg.addColorStop(.55, '#ffc83d'); hg.addColorStop(1, '#ff2a2a');
+      ctx.fillStyle = hg; const fw = bw * hk; ctx.fillRect(right ? bx + bw - fw : bx, heatY + (hot ? rand(-1.5, 1.5) : 0), fw, heatH);
+      for (let i = 1; i < 10; i++) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(bx + bw * i / 10, heatY, 2, heatH); }
+      ctx.font = `${13 * u}px 'Press Start 2P', monospace`; ctx.textBaseline = 'middle'; ctx.lineWidth = 5 * u; ctx.strokeStyle = '#000';
+      const left = `${p.name} GUN HEAT`;
+      const status = p.locked > 0 ? 'OVERHEATED — COOLING' : p.pu.cool > 0 ? '❄ FROZEN — NO HEAT' : holding ? 'LET GO!' : hot ? 'TOO HOT!' : '';
+      ctx.textAlign = right ? 'right' : 'left'; ctx.fillStyle = '#fff'; ctx.strokeText(left, right ? bx + bw - 10 * u : bx + 10 * u, heatY + heatH / 2); ctx.fillText(left, right ? bx + bw - 10 * u : bx + 10 * u, heatY + heatH / 2);
+      if (status) { ctx.textAlign = 'center'; ctx.font = `${16 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = (holding || hot || p.locked > 0) && Math.sin(this.rt * 18) > 0 ? '#ff3b4f' : '#fff'; ctx.strokeText(status, bx + bw / 2, heatY + heatH / 2); ctx.fillText(status, bx + bw / 2, heatY + heatH / 2); }
+      ctx.textBaseline = 'top';
     }
     ctx.globalAlpha = 1;
-    // centre top: timer / boss bar
-    ctx.textAlign = 'center'; ctx.font = `${20 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#fff'; ctx.lineWidth = 6 * u; ctx.strokeStyle = '#000';
+    // ---- centre top: timer, mode, contamination, boss
+    ctx.textAlign = 'center'; ctx.font = `${22 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#fff'; ctx.lineWidth = 6 * u; ctx.strokeStyle = '#000';
     let top = '';
     if (this.arc) top = this.arc.len ? fmtTime(this.arc.len - this.arc.el) : fmtTime(this.arc.el);
     else if (this.lvl) top = fmtTime(Math.max(0, this.lvl.dur - this.lvl.t));
     else if (this.tut) top = 'TRAINING';
     else if (this.tp) top = fmtTime(this.tp.len - this.tp.el);
     else if (this.rx) top = `ROUND ${Math.min(this.rx.round + 1, this.rx.rounds)}/${this.rx.rounds}`;
+    if (top) { if (this.arc && this.arc.len && this.arc.len - this.arc.el < 10) ctx.fillStyle = Math.sin(this.rt * 12) > 0 ? '#ff3b4f' : '#fff'; ctx.strokeText(top, W / 2, pad); ctx.fillText(top, W / 2, pad); }
+    let cy = pad + 34 * u;
     const vlab = { bossrush: 'BOSS RUSH', friend: 'FRIEND OR FOE', oneshot: 'ONE SHOT — MISS = −1 ♥' }[this.variant] || (this.tp ? 'TARGET PRACTICE' : this.rx ? 'REACTION LAB' : '');
-    if (vlab && !(this.boss && this.boss.state !== 'leave')) { ctx.save(); ctx.font = `${10 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#4fe3ff'; ctx.textAlign = 'center'; ctx.strokeText(vlab, W / 2, pad + 32 * u); ctx.fillText(vlab, W / 2, pad + 32 * u); ctx.restore(); }
+    if (vlab) { ctx.font = `${11 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#4fe3ff'; ctx.lineWidth = 4 * u; ctx.strokeText(vlab, W / 2, cy); ctx.fillText(vlab, W / 2, cy); cy += 22 * u; }
+    if (this.contamOn) {
+      const bw = Math.min(520 * u, W * .34), bh = 14 * u, bx = W / 2 - bw / 2, k = this.contam / 100;
+      ctx.font = `${11 * u}px 'Press Start 2P', monospace`; ctx.lineWidth = 4 * u;
+      const lab = this.crowded ? '☣ TOO CROWDED! ☣' : '☣ CONTAMINATION';
+      ctx.fillStyle = (this.crowded || k > .75) && Math.sin(this.rt * 14) > 0 ? '#ff3b4f' : '#b6ff3d'; ctx.strokeText(lab, W / 2, cy); ctx.fillText(lab, W / 2, cy); cy += 17 * u;
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(bx - 3, cy - 3, bw + 6, bh + 6);
+      const cg = ctx.createLinearGradient(bx, 0, bx + bw, 0); cg.addColorStop(0, '#3dff8a'); cg.addColorStop(.6, '#ffe14a'); cg.addColorStop(1, '#c03dff');
+      ctx.fillStyle = cg; ctx.fillRect(bx, cy + (k > .75 ? rand(-1, 1) : 0), bw * k, bh); cy += bh + 14 * u;
+    }
+    if (this.boss && this.boss.state !== 'leave') {
+      const b = this.boss, B = BOSSES[b.kind], bw = Math.min(600 * u, W * .4), bx = W / 2 - bw / 2;
+      ctx.font = `${13 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = B.col; ctx.lineWidth = 5 * u; ctx.strokeText(B.name, W / 2, cy); ctx.fillText(B.name, W / 2, cy); cy += 20 * u;
+      ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(bx - 3, cy - 2, bw + 6, 22 * u);
+      ctx.fillStyle = B.col; ctx.fillRect(bx, cy, bw * Math.max(0, b.hp / b.maxHp), 18 * u);
+    }
     if (this.rx && this.countdown <= 0) {
-      const R = this.rx; let msg = '', col = '#fff', sz = 34;
+      const R = this.rx; let msg = '', col = '#fff', sz = 36;
       if (R.state === 'ready') { msg = R.round === 0 ? 'GET READY…' : 'NEXT ROUND…'; col = '#4fe3ff'; }
       else if (R.state === 'wait') { msg = 'WAIT FOR IT…'; col = '#ffc83d'; }
-      else if (R.state === 'go') { msg = 'SHOOT!'; col = '#3dff8a'; sz = 44; }
+      else if (R.state === 'go') { msg = 'SHOOT!'; col = '#3dff8a'; sz = 48; }
       else if (R.state === 'result') { msg = R.msg; col = '#fff'; sz = 26; }
-      ctx.save(); ctx.font = `${sz * u}px 'Press Start 2P', monospace`; ctx.textAlign = 'center'; ctx.lineWidth = 8 * u; ctx.strokeStyle = '#000'; ctx.fillStyle = col;
-      ctx.strokeText(msg, W / 2, H * .14); ctx.fillText(msg, W / 2, H * .14); ctx.restore();
-      if (this.np === 2) { ctx.save(); ctx.font = `${12 * u}px 'Press Start 2P', monospace`; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; const t2 = `ROUNDS  RED ${this.players[0].st.rounds || 0} — ${this.players[1].st.rounds || 0} GREEN`; ctx.strokeText(t2, W / 2, H * .14 + 50 * u); ctx.fillText(t2, W / 2, H * .14 + 50 * u); ctx.restore(); }
+      ctx.font = `${sz * u}px 'Press Start 2P', monospace`; ctx.lineWidth = 8 * u; ctx.fillStyle = col; ctx.strokeText(msg, W / 2, H * .2); ctx.fillText(msg, W / 2, H * .2);
+      if (this.np === 2) { ctx.font = `${13 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = '#fff'; const t2 = `ROUNDS  RED ${this.players[0].st.rounds || 0} — ${this.players[1].st.rounds || 0} GREEN`; ctx.strokeText(t2, W / 2, H * .2 + 54 * u); ctx.fillText(t2, W / 2, H * .2 + 54 * u); }
     }
-    if (top) { if (this.arc && this.arc.len && this.arc.len - this.arc.el < 10) ctx.fillStyle = Math.sin(this.rt * 12) > 0 ? '#ff3b4f' : '#fff'; ctx.strokeText(top, W / 2, pad); ctx.fillText(top, W / 2, pad); }
-    if (this.boss && this.boss.state !== 'leave') {
-      const b = this.boss, B = BOSSES[b.kind], bw = Math.min(560 * u, W * .38), bx = W / 2 - bw / 2, by = pad + 36 * u;
-      ctx.font = `${11 * u}px 'Press Start 2P', monospace`; ctx.fillStyle = B.col; ctx.strokeText(B.name, W / 2, by); ctx.fillText(B.name, W / 2, by);
-      ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(bx - 3, by + 17 * u, bw + 6, 18 * u);
-      ctx.fillStyle = B.col; ctx.fillRect(bx, by + 19 * u, bw * Math.max(0, b.hp / b.maxHp), 14 * u);
-    }
-    // contamination meter
-    if (this.contamOn) {
-      const bw = Math.min(620 * u, W * .42), bh = 16 * u, bx = W / 2 - bw / 2, by = H - 46 * u, k = this.contam / 100;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = `${13 * u}px 'Press Start 2P', monospace`; ctx.lineWidth = 5 * u; ctx.strokeStyle = '#000';
-      const lab = this.crowded ? '☣ TOO CROWDED! CONTAMINATION RISING ☣' : '☣ CONTAMINATION';
-      ctx.fillStyle = (this.crowded || k > .75) && Math.sin(this.rt * 14) > 0 ? '#ff3b4f' : '#b6ff3d'; ctx.strokeText(lab, W / 2, by - 4); ctx.fillText(lab, W / 2, by - 4);
-      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
-      const cg = ctx.createLinearGradient(bx, 0, bx + bw, 0); cg.addColorStop(0, '#3dff8a'); cg.addColorStop(.6, '#ffe14a'); cg.addColorStop(1, '#c03dff');
-      ctx.fillStyle = cg; ctx.fillRect(bx, by + (k > .75 ? rand(-1, 1) : 0), bw * k, bh);
-      ctx.textBaseline = 'top';
-    }
-    // camera status
-    ctx.font = `${10 * u}px Rubik, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.globalAlpha = .55; ctx.fillStyle = '#fff';
-    ctx.fillText(`board cam ${Vision.boardOn() ? '● ' + Vision.fps + 'fps' : '○ off (mouse)'}   ·   duck cam ${Vision.duckReady() ? '●' : '○ off'}   ·   Esc = pause`, W / 2, H - 6);
+    // camera status (small, just above the heat bar on the right)
+    ctx.font = `${10 * this.uiScale}px Rubik, sans-serif`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.globalAlpha = .55; ctx.fillStyle = '#fff';
+    ctx.fillText(`board cam ${Vision.boardOn() ? '● ' + Vision.fps + 'fps' : '○ off (mouse)'} · duck cam ${Vision.duckReady() ? '●' : '○ off'} · Esc = pause`, W - pad, heatY - 6);
     ctx.restore();
   },
   drawDuckWarning(ctx) {
@@ -2300,7 +2386,247 @@ const AutoFill = {
   }
 };
 
+// ====================== TROUBLESHOOTING TEST ======================
+const Diag = {
+  TEST: [
+    { id: 'off', title: 'LASERS OFF', text: 'Put both lasers down. Checking for false shots while monsters move…', scene: 'busy', dur: 8 },
+    { id: 'rD', col: 'red', title: 'RED · DARK', text: 'Hold the RED laser steady inside the DARK box (left)', scene: 'zones', zone: 'dark', dur: 4 },
+    { id: 'rB', col: 'red', title: 'RED · BRIGHT', text: 'Hold the RED laser steady inside the BRIGHT box (right)', scene: 'zones', zone: 'bright', dur: 4 },
+    { id: 'rT', col: 'red', title: 'RED · TARGET', text: 'Hold the RED laser on the centre of the TARGET (middle)', scene: 'zones', zone: 'target', dur: 4 },
+    { id: 'gD', col: 'green', title: 'GREEN · DARK', text: 'Hold the GREEN laser steady inside the DARK box (left)', scene: 'zones', zone: 'dark', dur: 4 },
+    { id: 'gB', col: 'green', title: 'GREEN · BRIGHT', text: 'Hold the GREEN laser steady inside the BRIGHT box (right)', scene: 'zones', zone: 'bright', dur: 4 },
+    { id: 'gT', col: 'green', title: 'GREEN · TARGET', text: 'Hold the GREEN laser on the centre of the TARGET (middle)', scene: 'zones', zone: 'target', dur: 4 },
+    { id: 'tR', col: 'red', taps: 6, title: 'RED · TAPS', text: 'TAP the RED laser 6 times in the dark box — about one tap a second', scene: 'zones', zone: 'dark', dur: 8 },
+    { id: 'tG', col: 'green', taps: 6, title: 'GREEN · TAPS', text: 'TAP the GREEN laser 6 times in the dark box — about one tap a second', scene: 'zones', zone: 'dark', dur: 8 },
+    { id: 'aim', col: 'any', title: 'AIM', text: 'Point at each of the 4 target centres, then LET GO — where you let go is recorded', scene: 'aim', dur: 20 },
+    { id: 'dU', duck: true, title: 'DUCK CAMERA · STAND', text: 'Stand where a player would, in view of the duck camera', scene: 'plain', dur: 3 },
+    { id: 'dD', duck: true, title: 'DUCK CAMERA · DUCK', text: 'Now DUCK out of view of the duck camera', scene: 'plain', dur: 3 },
+  ],
+  TUNE: [
+    { id: 'off', title: 'AUTO-TUNE · LASERS OFF', text: 'Put both lasers down. Learning what the screen looks like with no laser…', scene: 'busy', dur: 7 },
+    { id: 'rD', col: 'red', title: 'AUTO-TUNE · RED · DARK', text: 'Hold the RED laser inside the DARK box — move it around a little', scene: 'zones', zone: 'dark', dur: 5 },
+    { id: 'rB', col: 'red', title: 'AUTO-TUNE · RED · BRIGHT', text: 'Hold the RED laser inside the BRIGHT box — move it around a little', scene: 'zones', zone: 'bright', dur: 5 },
+    { id: 'rT', col: 'red', title: 'AUTO-TUNE · RED · TARGET', text: 'Hold the RED laser on the TARGET — move it around a little', scene: 'zones', zone: 'target', dur: 5 },
+    { id: 'gD', col: 'green', green: true, title: 'AUTO-TUNE · GREEN · DARK', text: 'Hold the GREEN laser inside the DARK box — move it around a little', scene: 'zones', zone: 'dark', dur: 5 },
+    { id: 'gB', col: 'green', green: true, title: 'AUTO-TUNE · GREEN · BRIGHT', text: 'Hold the GREEN laser inside the BRIGHT box — move it around a little', scene: 'zones', zone: 'bright', dur: 5 },
+    { id: 'gT', col: 'green', green: true, title: 'AUTO-TUNE · GREEN · TARGET', text: 'Hold the GREEN laser on the TARGET — move it around a little', scene: 'zones', zone: 'target', dur: 5 },
+  ],
+  COMBOS: (() => { const o = []; for (const dom of [25, 35, 45, 55, 70, 90]) for (const minB of [140, 180, 220]) for (const maxPix of [20, 40, 80]) o.push({ dom, minB, maxPix }); return o; })(),
+  ZONES: { dark: [.06, .3, .32, .88], bright: [.68, .3, .94, .88], target: [.5, .6] },
+  AIMS: [[.2, .32], [.8, .32], [.2, .78], [.8, .78]],
+  start(mode = 'test') {
+    this.mode = mode; const tc = S.testCols || 'both';
+    this.skip = new Set(tc === 'red' ? ['green'] : tc === 'green' ? ['red'] : []);
+    const keep = s => !this.skip.has(s.col);
+    this.steps = (mode === 'tune' ? this.TUNE : mode === 'verify' ? this.TEST.filter(s => !s.duck) : this.TEST).filter(keep);
+    if (mode === 'tune') { this.before = { minBright: S.minBright, dom: S.dom, maxPix: S.maxPix, confirm: S.confirm, dispB: S.dispB }; this.stats = this.COMBOS.map(() => ({})); this.rr = 0; Vision.tuner = (d, w, h) => this.tuneFrame(d, w, h); }
+    this.i = -1; this.res = {}; this.mons = null; Game.mode = 'diag'; FX.clear();
+    $('#diagApply').style.display = 'none'; $('#diagUndo').style.display = 'none'; $('#diagTuneAgain').style.display = 'none';
+    UI.showScreen(null); $$('.calCorner').forEach(c => c.style.display = 'none');
+    $('#diagUI').classList.add('show'); $('#diagReport').style.display = 'none';
+    $('#diagSkip').onclick = () => this.next(); $('#diagStop').onclick = () => this.stop();
+    $('#diagCopy').onclick = () => { const t = $('#diagCode'); t.select(); navigator.clipboard.writeText(t.value).then(() => toast('Report code copied — paste it into your chat with Claude'), () => { document.execCommand('copy'); toast('Copied'); }); };
+    $('#diagAgain').onclick = () => this.start(this.mode === 'verify' ? 'verify' : 'test'); $('#diagClose').onclick = () => this.stop();
+    $('#diagApply').onclick = () => { toast('New settings kept'); this.stop(); };
+    $('#diagUndo').onclick = () => { Object.assign(S, this.before); saveSettings(); applyDisplay(); UI.refreshSliders(); toast('Previous settings restored'); this.stop(); };
+    $('#diagTuneAgain').onclick = () => this.start('tune');
+    this.next();
+  },
+  stop() { Vision.tuner = null; $('#diagUI').classList.remove('show'); Game.mode = 'setup'; UI.showScreen('setup'); UI.refreshSliders(); },
+  next() {
+    if (this.st) this.finishStep();
+    this.i++;
+    while (this.steps[this.i] && ((this.steps[this.i].duck && !Vision.duckReady()) || this.skip.has(this.steps[this.i].col))) { this.res[this.steps[this.i].id] = { skipped: this.steps[this.i].duck ? 'no duck camera' : 'no green laser' }; this.i++; }
+    const s = this.st = this.steps[this.i];
+    if (!s) return this.mode === 'tune' ? this.finishTune() : this.report();
+    this.phase = 'prep'; this.t = 0; this.lastF = Vision.frameNo || 0; FX.clear();
+    this.acc = { f: 0, r: 0, g: 0, size: 0, bri: [0, 0, 0], briN: 0, cR: 0, cG: 0, pkR: 0, pkG: 0, sat: 0, falsePos: [], edges: 0, prev: false, taps: [], wrongCol: 0, pres: [] };
+    $('#diagTitle').textContent = `${this.mode === 'verify' ? 'CHECKING NEW SETTINGS · ' : ''}STEP ${this.i + 1} OF ${this.steps.length} · ${s.title}`; $('#diagText').textContent = s.text;
+    Snd.play('ui');
+  },
+  finishStep() {
+    const s = this.st, a = this.acc, o = { f: a.f };
+    if (s.id === 'off') Object.assign(o, { fr: +(a.r / Math.max(1, a.f)).toFixed(3), fg: +(a.g / Math.max(1, a.f)).toFixed(3), cR: a.cR, cG: a.cG, pkR: a.pkR, pkG: a.pkG, sat: +a.sat.toFixed(3), pos: a.falsePos });
+    else if (s.taps) Object.assign(o, { taps: a.edges, want: s.taps, other: a.wrongCol, seen: +((s.col === 'red' ? a.r : a.g) / Math.max(1, a.f)).toFixed(2) });
+    else if (s.id === 'aim') { const offs = a.taps.map(([x, y]) => { let best = null, bd = 1e9; for (const [tx, ty] of this.AIMS) { const d = Math.hypot((x - tx) * Game.W, (y - ty) * Game.H); if (d < bd) { bd = d; best = [(x - tx) * Game.W, (y - ty) * Game.H]; } } return best; }); o.n = offs.length; if (offs.length) { o.dx = Math.round(offs.reduce((t, v) => t + v[0], 0) / offs.length); o.dy = Math.round(offs.reduce((t, v) => t + v[1], 0) / offs.length); o.err = Math.round(offs.reduce((t, v) => t + Math.hypot(v[0], v[1]), 0) / offs.length); } }
+    else if (s.duck) { o.L = +(a.pres.reduce((t, v) => t + v[0], 0) / Math.max(1, a.pres.length)).toFixed(3); o.R = +(a.pres.reduce((t, v) => t + v[1], 0) / Math.max(1, a.pres.length)).toFixed(3); }
+    else { const k = s.col === 'red' ? a.r : a.g; Object.assign(o, { rate: +(k / Math.max(1, a.f)).toFixed(2), size: k ? Math.round(a.size / k) : 0, sz: [a.mn ?? 0, a.mxs || 0], pts: a.pts || [], dot: a.briN ? a.bri.map(v => Math.round(v / a.briN)) : null, base: a.base || null, other: s.col === 'red' ? a.g : a.r }); }
+    this.res[s.id] = o;
+  },
+  frame(dt) {
+    const s = this.st; if (!s) return;
+    this.t += dt;
+    if (this.phase === 'prep') {
+      $('#diagCount').textContent = `Get ready… ${Math.ceil(3 - this.t)}`;
+      if (this.t >= 3) { this.phase = 'go'; this.t = 0; this.lastF = Vision.frameNo || 0; Snd.play('go');
+        if (s.zone) { const z = this.ZONES[s.zone], u = s.zone === 'target' ? z[0] : (z[0] + z[2]) / 2, v = s.zone === 'target' ? z[1] : (z[1] + z[3]) / 2; this.acc.base = Vision.sampleScreen(u, v); } }
+    } else {
+      $('#diagCount').textContent = `Measuring… ${Math.ceil(s.dur - this.t)} s` + (s.taps ? `   ·   taps seen: ${this.acc.edges}` : '') + (s.id === 'aim' ? `   ·   taps: ${this.acc.taps.length}/4` : '');
+      if ((Vision.frameNo || 0) !== this.lastF) { this.lastF = Vision.frameNo; this.measure(s); }
+      if (this.t >= s.dur || (s.id === 'aim' && this.acc.taps.length >= 4)) { Snd.play('tick'); this.next(); return; }
+    }
+    this.draw(dt);
+  },
+  measure(s) {
+    const a = this.acc, R = Vision.spots.red, G = Vision.spots.green, info = Vision.info || {};
+    a.f++; if (R.seen) a.r++; if (G.seen) a.g++;
+    a.cR = Math.max(a.cR, info.cR || 0); a.cG = Math.max(a.cG, info.cG || 0); a.pkR = Math.max(a.pkR, info.pkR || 0); a.pkG = Math.max(a.pkG, info.pkG || 0); a.sat = Math.max(a.sat, info.sat || 0);
+    if (s.id === 'off' && a.f % 12 === 0) { for (const [sp, c] of [[R, 'r'], [G, 'g']]) if (sp.seen && a.falsePos.length < 16) a.falsePos.push([c, +sp.nx.toFixed(2), +sp.ny.toFixed(2), sp.count]); }
+    if (s.col && s.col !== 'any') { const sp = Vision.spots[s.col]; if (sp.seen) { a.mn = Math.min(a.mn ?? 1e9, sp.count); a.mxs = Math.max(a.mxs || 0, sp.count); a.pts = a.pts || []; if (a.f % 10 === 0 && a.pts.length < 6) a.pts.push([+sp.nx.toFixed(2), +sp.ny.toFixed(2)]); } }
+    if (s.col === 'red' || s.col === 'green') {
+      const sp = Vision.spots[s.col], other = Vision.spots[s.col === 'red' ? 'green' : 'red'];
+      if (sp.seen) { a.size += sp.count; const px = Vision.pixelAt(sp.cx, sp.cy); a.bri[0] += px[0]; a.bri[1] += px[1]; a.bri[2] += px[2]; a.briN++;  }
+      if (s.taps) { if (sp.present && !a.prev) { a.edges++; Snd.play('shot'); FX.x(sp.nx * Game.W, sp.ny * Game.H, '#fff', true); } a.prev = sp.present; if (other.present) a.wrongCol++; }
+    }
+    if (s.id === 'aim') {
+      for (const sp of [R, G]) {
+        const k = sp === R ? 'pr' : 'pg', bk = k + 'b';
+        if (sp.present) { (a[bk] = a[bk] || []).push([sp.nx, sp.ny]); if (a[bk].length > 6) a[bk].shift(); }
+        else if (a[k] && a[bk] && a[bk].length) { const n = a[bk].length, x = a[bk].reduce((t, p) => t + p[0], 0) / n, y = a[bk].reduce((t, p) => t + p[1], 0) / n; a.taps.push([x, y]); a[bk] = []; FX.x(x * Game.W, y * Game.H, '#fff', true); Snd.play('shot'); }
+        a[k] = sp.present;
+      }
+    }
+    if (s.duck) a.pres.push([Vision.presence.left, Vision.presence.right]);
+  },
+  draw(dt) {
+    const ctx = Game.ctx, W = Game.W, H = Game.H, u = Game.uiScale, s = this.st, t = Game.rt;
+    ctx.setTransform(Game.dpr, 0, 0, Game.dpr, 0, 0); Game.shakeX = Game.shakeY = 0;
+    FX.update(dt);
+    if (s.scene === 'busy') {
+      Game.drawSpace(ctx);
+      if (!this.mons) this.mons = ['germ', 'virus', 'atom', 'isotope', 'planet', 'dna', 'comet'].map((type, k) => ({ type, seed: k * 37 + 5, hp: 1, maxHp: 1, look: [0, 0], hist: [], alpha: 1, flash: false, k }));
+      for (const m of this.mons) {
+        const x = W * (.5 + Math.cos(t * .5 + m.k) * .36), y = H * (.55 + Math.sin(t * .7 + m.k * 2) * .28);
+        m.hist.push({ x, y }); if (m.hist.length > 30) m.hist.shift();
+        ctx.save(); ctx.translate(x, y); DRAW[m.type](ctx, m, MTYPES[m.type].r * u * S.size / 100, t + m.seed); ctx.restore();
+      }
+      if (Math.random() < dt * 2) { const m = pick(this.mons); const x = W * rand(.2, .8), y = H * rand(.3, .8); FX.goo(x, y, MTYPES[m.type].col, 8); FX.burst(x, y, [MTYPES[m.type].col, '#fff', '#ffc83d'], 24, 400, 6); FX.text(x, y, '+150', '#fff', 18, .8); }
+      // sample HUD-style bars
+      const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, '#4fe3ff'); g.addColorStop(.5, '#ffc83d'); g.addColorStop(1, '#ff2a2a'); ctx.fillStyle = g; ctx.fillRect(0, H - 34 * u, W * (.5 + Math.sin(t) * .4), 28 * u);
+    } else {
+      ctx.fillStyle = '#05070f'; ctx.fillRect(0, 0, W, H);
+    }
+    if (s.scene === 'zones') {
+      const Z = this.ZONES, lab = (txt, x, y, on) => { ctx.font = `${16 * u}px 'Press Start 2P', monospace`; ctx.textAlign = 'center'; ctx.fillStyle = on ? '#ffc83d' : '#6b77a8'; ctx.fillText(txt, x, y); };
+      const [dx0, dy0, dx1, dy1] = Z.dark; ctx.fillStyle = '#000'; ctx.fillRect(dx0 * W, dy0 * H, (dx1 - dx0) * W, (dy1 - dy0) * H); ctx.strokeStyle = '#333a5a'; ctx.lineWidth = 2; ctx.strokeRect(dx0 * W, dy0 * H, (dx1 - dx0) * W, (dy1 - dy0) * H);
+      const [bx0, by0, bx1, by1] = Z.bright; ctx.fillStyle = '#ffffff'; ctx.fillRect(bx0 * W, by0 * H, (bx1 - bx0) * W, (by1 - by0) * H);
+      Game.drawTarget(ctx, { x: Z.target[0] * W, y: Z.target[1] * H, r: H * .17, t: 1, life: 1e9, dead: false });
+      lab('DARK', (dx0 + dx1) / 2 * W, dy0 * H - 18 * u, s.zone === 'dark'); lab('TARGET', Z.target[0] * W, (Z.target[1] - .17) * H - 30 * u, s.zone === 'target'); lab('BRIGHT', (bx0 + bx1) / 2 * W, by0 * H - 18 * u, s.zone === 'bright');
+      // highlight
+      ctx.save(); ctx.strokeStyle = '#ffc83d'; ctx.lineWidth = 6; ctx.setLineDash([16, 10]); ctx.lineDashOffset = -t * 40;
+      if (s.zone === 'target') { ctx.beginPath(); ctx.arc(Z.target[0] * W, Z.target[1] * H, H * .2, 0, TAU); ctx.stroke(); }
+      else { const z = Z[s.zone]; ctx.strokeRect(z[0] * W - 8, z[1] * H - 8, (z[2] - z[0]) * W + 16, (z[3] - z[1]) * H + 16); }
+      ctx.restore();
+    }
+    if (s.scene === 'aim') { for (const [x, y] of this.AIMS) Game.drawTarget(ctx, { x: x * W, y: y * H, r: 46 * u, t: 1, life: 1e9, dead: false }); }
+    if (s.scene === 'plain' && Vision.duckOn()) {
+      ctx.font = `${20 * u}px Rubik, sans-serif`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.fillText(`Duck camera sees: left ${(Vision.presence.left * 100).toFixed(0)}%  ·  right ${(Vision.presence.right * 100).toFixed(0)}%   (seen above ${S.duckT}%)`, W / 2, H * .6);
+    }
+    if (s.col) for (const k of ['red', 'green']) { const sp = Vision.spots[k]; if (!sp.seen) continue; const x = sp.nx * W, y = sp.ny * H; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 26 * u, 0, TAU); ctx.moveTo(x - 40 * u, y); ctx.lineTo(x - 30 * u, y); ctx.moveTo(x + 30 * u, y); ctx.lineTo(x + 40 * u, y); ctx.moveTo(x, y - 40 * u); ctx.lineTo(x, y - 30 * u); ctx.moveTo(x, y + 30 * u); ctx.lineTo(x, y + 40 * u); ctx.stroke(); }
+    FX.draw(ctx);
+  },
+  drawCam() {
+    const c = $('#diagCam'), x = c.getContext('2d'); if (!Vision.w) return;
+    if (c.width !== Vision.w) { c.width = Vision.w; c.height = Vision.h; }
+    x.drawImage(Vision.c, 0, 0);
+    for (const [k, col] of [['red', '#ff3b4f'], ['green', '#3dff8a']]) { const s = Vision.spots[k]; if (s.seen) { x.strokeStyle = col; x.lineWidth = 3; x.beginPath(); x.arc(s.cx, s.cy, 14, 0, TAU); x.stroke(); } }
+  },
+  // ---------- auto-tune ----------
+  inZone(s, nx, ny) {
+    const Z = this.ZONES[s.zone]; if (!Z) return false;
+    if (s.zone === 'target') return Math.hypot((nx - Z[0]) * Game.W, (ny - Z[1]) * Game.H) < Game.H * .22;
+    return nx > Z[0] - .03 && nx < Z[2] + .03 && ny > Z[1] - .03 && ny < Z[3] + .03;
+  },
+  tuneFrame(d, w, h) {
+    const s = this.st; if (!s || this.phase !== 'go' || (s.col && this.t < .6)) return;
+    for (let j = 0; j < 6; j++) {
+      const ci = this.rr++ % this.COMBOS.length, C = this.COMBOS[ci], P = { minB: C.minB, dom: C.dom, bgK: S.bgIgnore / 100, minPix: S.minPix, maxPix: C.maxPix };
+      const r = Vision.scan(d, w, h, P, false), st = this.stats[ci][s.id] || (this.stats[ci][s.id] = { f: 0, t: 0, x: 0, w: 0, fr: 0, fg: 0 });
+      st.f++;
+      if (s.id === 'off') { if (r.red) st.fr++; if (r.green) st.fg++; }
+      else { const mine = r[s.col], other = r[s.col === 'red' ? 'green' : 'red']; if (mine) { if (this.inZone(s, mine.nx, mine.ny)) st.t++; else st.w++; } if (other) st.x++; }
+    }
+  },
+  finishTune() {
+    Vision.tuner = null; this.st = null;
+    const holds = this.TUNE.filter(s => s.col && !this.skip.has(s.col)).map(s => s.id);
+    let best = -1, bestScore = -1e9, table = [];
+    this.COMBOS.forEach((C, i) => {
+      const st = this.stats[i], off = st.off || { f: 1, fr: 0, fg: 0 };
+      const F = (off.fr + off.fg) / Math.max(1, off.f);
+      let T = 0, X = 0, Wr = 0, n = 0, per = {};
+      for (const id of holds) { const q = st[id]; if (!q || !q.f) continue; T += q.t / q.f; X += q.x / q.f; Wr += q.w / q.f; per[id] = +(q.t / q.f).toFixed(2); n++; }
+      if (n) { T /= n; X /= n; Wr /= n; }
+      const score = T - 10 * F - 2 * X - 2 * Wr + .02 * (C.dom / 90 + C.minB / 220);
+      table.push({ i, score, F, T, X, Wr, per });
+      if (score > bestScore) { bestScore = score; best = i; }
+    });
+    const B = this.COMBOS[best], row = table.find(t => t.i === best);
+    S.dom = B.dom; S.minBright = B.minB; S.maxPix = B.maxPix; S.confirm = row.F > .003 ? 3 : 2;
+    const brightIds = holds.filter(id => /B|T/.test(id[1])), brightRate = brightIds.length ? brightIds.reduce((t, id) => t + (row.per[id] || 0), 0) / brightIds.length : 1;
+    this.darkened = false; if (brightRate < .6 && S.dispB > 50) { S.dispB = Math.max(45, S.dispB - 15); applyDisplay(); this.darkened = true; }
+    saveSettings(); UI.refreshSliders();
+    this.tuneSummary = { chosen: { b: S.minBright, d: S.dom, mx: S.maxPix, cf: S.confirm, gb: S.dispB }, before: this.before, fit: { F: +row.F.toFixed(4), T: +row.T.toFixed(2), X: +row.X.toFixed(2), W: +row.Wr.toFixed(2), per: row.per }, top: table.sort((a, b) => b.score - a.score).slice(0, 5).map(t => [this.COMBOS[t.i].dom, this.COMBOS[t.i].minB, this.COMBOS[t.i].maxPix, +t.T.toFixed(2), +t.F.toFixed(3)]) };
+    toast('Settings tuned — now checking them…', 2500);
+    this.start('verify');
+  },
+  report() {
+    this.st = null; const R = this.res, out = [];
+    const add = (ok, txt) => out.push(`<div class="dRow"><span>${ok === 2 ? '✅' : ok === 1 ? '⚠️' : '❌'}</span><span>${txt}</span></div>`);
+    if (R.off) { const f = Math.max(R.off.fr, R.off.fg); add(f < .01 ? 2 : f < .05 ? 1 : 0, `<b>False shots with lasers off:</b> red ${(R.off.fr * 100).toFixed(1)}%, green ${(R.off.fg * 100).toFixed(1)}% of frames.` + (f >= .01 ? ' Try lowering <i>Game colour strength</i>, raising <i>Frames to confirm</i> or <i>Minimum brightness</i>.' : '')); if (R.off.sat > .05) add(1, `<b>${Math.round(R.off.sat * 100)}% of the camera picture is maxed-out white.</b> Lower the camera exposure or <i>Game brightness</i> — lasers can't show up on maxed-out areas.`); }
+    for (const [id, name] of [['rD', 'Red on dark'], ['rB', 'Red on bright'], ['rT', 'Red on target'], ['gD', 'Green on dark'], ['gB', 'Green on bright'], ['gT', 'Green on target']]) {
+      const r = R[id]; if (!r || r.rate == null) continue;
+      add(r.rate >= .8 ? 2 : r.rate >= .4 ? 1 : 0, `<b>${name}:</b> seen ${Math.round(r.rate * 100)}% of the time` + (r.rate < .8 ? (id.endsWith('D') ? ' — lower <i>Minimum brightness</i> / <i>Colour strength</i>, or raise camera exposure a little.' : ' — lower <i>Game brightness</i> or camera exposure so the bright area isn\'t maxed out.') : '') + (r.other > r.f * .2 ? ` (the other colour was also seen ${r.other} times — colours are getting mixed up)` : ''));
+    }
+    for (const [id, name] of [['tR', 'Red taps'], ['tG', 'Green taps']]) { const r = R[id]; if (!r || r.taps == null) continue; add(r.taps === r.want ? 2 : Math.abs(r.taps - r.want) <= 1 ? 1 : 0, `<b>${name}:</b> ${r.taps} of ${r.want} detected` + (r.taps > r.want ? ' — extra taps: raise <i>Frames to confirm</i>.' : r.taps < r.want ? ' — missed taps: lower <i>Frames to confirm</i> or the sensitivity sliders.' : '')); }
+    if (R.aim && R.aim.n) add(R.aim.err < 30 ? 2 : R.aim.err < 60 ? 1 : 0, `<b>Aim:</b> taps landed on average ${R.aim.err}px from the centres (${R.aim.dx > 0 ? R.aim.dx + 'px right' : -R.aim.dx + 'px left'}, ${R.aim.dy > 0 ? R.aim.dy + 'px low' : -R.aim.dy + 'px high'}).` + (R.aim.err >= 30 ? ' Recalibrate the corners.' : ''));
+    if (R.dU && R.dU.L != null && R.dD && R.dD.L != null) { const up = Math.max(R.dU.L, R.dU.R), dn = Math.max(R.dD.L, R.dD.R), t = S.duckT / 100; add(up > t && dn < t ? 2 : 0, `<b>Duck camera:</b> standing ${Math.round(up * 100)}%, ducking ${Math.round(dn * 100)}% (line at ${S.duckT}%).` + (up > t && dn < t ? '' : ' Adjust the "seen" threshold between those two numbers, or recapture the empty view.')); }
+    let head = '';
+    if (this.mode === 'verify' && this.tuneSummary) {
+      const c = this.tuneSummary.chosen, b = this.tuneSummary.before, f = this.tuneSummary.fit;
+      head = `<div class="card" style="margin-bottom:8px"><b style="color:var(--gold)">🤖 Auto-tune chose:</b> minimum brightness <b>${c.b}</b> (was ${b.minBright}), colour strength <b>${c.d}</b> (was ${b.dom}), maximum dot size <b>${c.mx}px</b> (was ${b.maxPix}), frames to confirm <b>${c.cf}</b> (was ${b.confirm})${this.darkened ? `, game brightness lowered to <b>${c.gb}%</b> (was ${b.dispB}%) because the laser was hard to see on bright areas` : ''}.<br><span class="small">While tuning, these settings found the laser ${Math.round(f.T * 100)}% of the time with ${(f.F * 100).toFixed(1)}% false shots. The checks below were run with the new settings.</span></div>`;
+      $('#diagApply').style.display = ''; $('#diagUndo').style.display = ''; $('#diagTuneAgain').style.display = '';
+    }
+    $('#diagSummary').innerHTML = head + out.join('');
+    const code = { v: 'LB-D3', cam: { w: Vision.w, h: Vision.h, fps: Vision.fps, res: S.res }, cal: !!S.corners, edges: [S.mT, S.mB, S.mL, S.mR], cols: S.testCols, tune: this.mode === 'verify' ? this.tuneSummary : undefined, set: { b: S.minBright, d: S.dom, px: S.minPix, mx: S.maxPix, bg: S.bgIgnore, cf: S.confirm, fg: S.forgive, lat: S.latency, gb: S.dispB, gs: S.dispS, dk: S.duckT }, scr: [Game.W, Game.H], r: R };
+    $('#diagCode').value = 'LBDIAG ' + JSON.stringify(code);
+    $('#diagReport').style.display = 'flex'; $('#diagCount').textContent = ''; Snd.play('fanfare');
+  }
+};
+
 // ====================== UI: menus, setup, end screens ======================
+const HELP = {
+  sBright: ['minBright', 'How bright a dot must look to the camera to count. <b>Raise</b> if you get shots with no laser on. <b>Lower</b> if the laser isn\'t picked up at all. Try Auto-set first.'],
+  sDom: ['dom', 'How much redder/greener than its surroundings a dot must be. <b>Raise</b> if coloured or white graphics cause false shots. <b>Lower</b> if the laser is missed on bright or coloured parts of the screen.'],
+  sPix: ['minPix', 'Specks smaller than this are ignored. <b>Raise</b> if random flickers count as shots. <b>Lower</b> if a small or distant laser dot is missed.'],
+  sMaxPix: ['maxPix', 'Spots bigger than this are ignored (projected pictures, writing, splats). A real laser dot is usually 3–30 px. <b>Lower</b> if you get false shots from on-screen graphics. <b>Raise</b> if a close-up laser glow is missed.'],
+  sBg: ['bgIgnore', 'Learns the projected picture and ignores things that aren\'t changing. Keep it high (80–100%). <b>Lower</b> only if a laser held still stops being seen.'],
+  sConf: ['confirm', 'A dot must be seen in this many camera frames in a row before it counts. <b>Raise</b> to 3 if you still get phantom shots. <b>1</b> is fastest but twitchier.'],
+  sForg: ['forgive', 'Extra space around each monster that still counts as a hit. <b>Raise</b> if clear hits aren\'t counting. <b>Lower</b> to make it harder.'],
+  sLat: ['latency', 'Webcams see things slightly late, so hits are checked against where monsters were this long ago. <b>Raise</b> if shots land behind fast monsters, <b>lower</b> if they land ahead.'],
+  sDuckT: ['duckT', 'How much of the picture must change for a player to count as seen. <b>Raise</b> if players get hit while properly ducked. <b>Lower</b> if standing players aren\'t caught.'],
+  sMT: ['mT', 'Pull the top edge in if the projector cuts it off.'], sMB: ['mB', 'Pull the bottom edge in if the projector cuts it off.'],
+  sML: ['mL', 'Pull the left edge in if the projector cuts it off.'], sMR: ['mR', 'Pull the right edge in if the projector cuts it off.'],
+  sDispB: ['dispB', 'Dims the projected game. Cameras see lasers best on darker pictures. <b>Lower</b> if the laser is missed on white or bright things (like targets). <b>Raise</b> if the game looks too dark.'],
+  sDispS: ['dispS', 'Tones down bright reds and greens in the game so the camera doesn\'t mistake them for lasers. <b>Lower</b> if you get false shots during play.'],
+  sHud: ['hud', 'Size of scores, bars and messages on screen.'],
+  sHS: ['heatShot', 'Heat each tap adds. <b>Raise</b> to punish rapid spamming, <b>lower</b> for gentler tapping.'],
+  sHH: ['holdMax', 'Holding the button this long blows up the gun. <b>Lower</b> to punish holding sooner.'],
+  sHC: ['cool', 'How fast the gun cools when the button is let go. <b>Raise</b> for a more forgiving gun.'],
+  sHF: ['holdFire', 'How often a held laser fires before it overheats. Higher = slower auto-fire.'],
+  sSize: ['size', 'Bigger monsters are easier to hit. <b>Raise</b> for a small screen or younger players.'],
+  sLives: ['lives', 'Lives each player starts with.'],
+  sCR: ['contamRate', 'How fast crowds and escapes fill the contamination meter. <b>Lower</b> for an easier game.'],
+  sSfx: ['sfx', 'Sound effects volume.'], sMus: ['music', 'Music volume.']
+};
+const CAP_HELP = {
+  exposureTime: 'Lower until the board looks dim but laser dots still glow. This is the single biggest fix for missed or false shots.',
+  exposureCompensation: 'Lower to darken the picture if you can\'t set exposure time directly.',
+  brightness: 'Lower to darken the picture. Too dark and the laser may be missed.',
+  contrast: 'Usually leave as is. Raising it can make dots stand out more.',
+  saturation: 'Higher makes red and green stronger, which helps tell the two lasers apart.'
+};
 const UI = {
   tab: 'tBoard', calibrating: -1, calPts: [], setupTest: false, pendingLevel: null, importTarget: null, endIds: [],
   showScreen(id) {
@@ -2340,6 +2666,10 @@ const UI = {
     bind('sForg', 'forgive', v => v + ' px'); bind('sLat', 'latency', v => v + ' ms');
     bind('sDuckT', 'duckT', v => v + '%');
     bind('sHS', 'heatShot', v => v + '%'); bind('sHH', 'holdMax', v => v + ' s'); bind('sCR', 'contamRate', v => v + '%'); bind('sHC', 'cool', v => v + '%/s'); bind('sHF', 'holdFire', v => v + ' ms');
+    bind('sMaxPix', 'maxPix', v => v + ' px');
+    $('#chkReticle').checked = S.reticle; $('#chkReticle').onchange = e => { S.reticle = e.target.checked; saveSettings(); };
+    bind('sConf', 'confirm', v => v + (v == 1 ? ' frame' : ' frames'));
+    bind('sDispB', 'dispB', v => v + '%', applyDisplay); bind('sDispS', 'dispS', v => v + '%', applyDisplay); bind('sHud', 'hud', v => v + '%');
     bind('sSize', 'size', v => v + '%');
     for (const k of ['MT', 'MB', 'ML', 'MR']) bind('s' + k, 'm' + k[1], v => v + '%', () => { Game.resize(); this.edgesChanged(); });
     $('#btnMReset').onclick = () => { for (const k of ['MT', 'MB', 'ML', 'MR']) { S['m' + k[1]] = 0; $('#s' + k).value = 0; $('#v' + k).textContent = '0%'; } saveSettings(); Game.resize(); this.edgesChanged(); }; bind('sLives', 'lives');
@@ -2362,6 +2692,10 @@ const UI = {
         toast(S.minBright >= 250 ? 'The picture is very bright — lower the camera exposure, then try again.' : 'Minimum brightness set to ' + S.minBright + '. Now test both lasers.', 4500); } }, 50);
     };
     $('#btnClearIgn').onclick = () => { Vision.ignore = []; toast('Ignored spots cleared'); };
+    $('#btnAim').onclick = () => { if (!Vision.boardOn()) return toast('Start the board camera first'); this.setupTest = true; this.aimT = null; $('#setup').classList.remove('show'); $$('.calCorner').forEach(c => c.style.display = 'none'); FX.clear(); toast('Shoot the targets. Esc to go back.'); };
+    $('#btnDiag').onclick = () => { if (!Vision.boardOn()) return toast('Start the board camera first'); Diag.start('test'); };
+    $('#selTestCols').value = S.testCols || 'both'; $('#selTestCols').onchange = e => { S.testCols = e.target.value; saveSettings(); };
+    $('#btnTune').onclick = () => { if (!Vision.boardOn()) return toast('Start the board camera first'); if (!S.corners) toast('Tip: calibrate the corners first for best results'); Diag.start('tune'); };
     $('#btnTestSnd').onclick = () => { Snd.init(); ['shot', 'kill', 'power', 'combo'].forEach((s, i) => setTimeout(() => Snd.play(s), i * 300)); };
     $('#btnClearHS').onclick = () => { if (confirm('Delete all high scores?')) { localStorage.removeItem('lb_hs'); toast('High scores cleared'); } };
     $('#btnResetSet').onclick = () => { if (confirm('Reset all settings (including calibration)?')) { localStorage.removeItem('lb_settings'); location.reload(); } };
@@ -2394,7 +2728,20 @@ const UI = {
       if (e.key.toLowerCase() === 'f' && e.target.tagName !== 'INPUT') this.act('fullscreen');
     });
     addEventListener('keyup', e => { if (e.key.toLowerCase() === 'd') Vision.fakeDuck = false; });
+    this.decorate(); applyDisplay();
     this.camStatus();
+  },
+  refreshSliders() {
+    for (const [id, [key]] of Object.entries(HELP)) { const el = $('#' + id); if (el && S[key] != null) { el.value = S[key]; const lab = $('#v' + id.slice(1)); if (lab && el.oninput) el.oninput(); } }
+  },
+  decorate() {
+    for (const [id, [key, help]] of Object.entries(HELP)) {
+      const el = $('#' + id); if (!el) continue; const lab = el.previousElementSibling;
+      const b = document.createElement('button'); b.className = 'rst'; b.textContent = '↺ default'; b.title = 'Reset to ' + DEFAULTS[key];
+      b.onclick = e => { e.preventDefault(); el.value = DEFAULTS[key]; el.oninput(); Snd.play('ui'); };
+      if (lab && lab.tagName === 'LABEL') lab.appendChild(b);
+      const p = document.createElement('p'); p.className = 'hint sl'; p.innerHTML = help; el.after(p);
+    }
   },
   act(a) {
     switch (a) {
@@ -2455,9 +2802,11 @@ const UI = {
       const k = inp.dataset.cap, adv = { [k]: +inp.value }; if (k === 'exposureTime' && caps.exposureMode) adv.exposureMode = 'manual';
       tr.applyConstraints({ advanced: [adv] }).catch(err => toast(err.message));
     });
-    const tb = document.createElement('button'); tb.className = 'sm gold'; tb.textContent = '🎯 Full-screen aim test'; tb.style.marginTop = '8px';
-    tb.onclick = () => { this.setupTest = true; $('#setup').classList.remove('show'); $$('.calCorner').forEach(c => c.style.display = 'none'); FX.clear(); toast('Shoot the targets. Esc to go back.'); };
-    box.appendChild(tb);
+    box.querySelectorAll('[data-cap]').forEach(inp => {
+      const k = inp.dataset.cap, def = st[k] ?? caps[k].min, lab = inp.previousElementSibling, b = document.createElement('button');
+      b.className = 'rst'; b.textContent = '↺ reset'; b.title = 'Back to the camera\'s starting value'; b.onclick = () => { inp.value = def; inp.oninput(); };
+      lab.appendChild(b); const hp = document.createElement('p'); hp.className = 'hint sl'; hp.textContent = CAP_HELP[k] || ''; inp.after(hp);
+    });
   },
   setupFrame(dt) {
     const v = Vision.boardVideo;
@@ -2509,7 +2858,7 @@ const UI = {
     const shoot = (x, y, col) => { const near = targets.some(([tx, ty]) => dist(x, y, tx, ty) < 40 * u + S.forgive * u); FX.x(x, y, col, near); Snd.play(near ? 'hit' : 'shot'); };
     for (const [k, col] of [['red', '#ff3b4f'], ['green', '#3dff8a']]) {
       const s = Vision.spots[k], x = s.nx * W, y = s.ny * H;
-      if (s.present) { ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 18 * u, 0, TAU); ctx.stroke(); if (!this.aimT.prev[k]) shoot(x, y, col); }
+      if (s.present && !this.aimT.prev[k]) shoot(x, y, col);
       this.aimT.prev[k] = s.present;
     }
     if (Mouse.down[0] && !this.aimT.prev.mouse) shoot(Mouse.x, Mouse.y, '#ff3b4f'); this.aimT.prev.mouse = Mouse.down[0];
